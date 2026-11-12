@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Coin Drop is an expense tracker where every expense drops as a coin through a Plinko board into its category bin.">
+<style>:root{color-scheme:light}body{margin:0}</style>
+</head>
+<body>
+<title>Coin Drop</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;500;700&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Layout: a bright periwinkle desk with bold ink outlines. Gold budget card and a Plinko board where every expense drops as a coin into its category bin, then jars, a six-month stacked chart and the transactions. */
+:root {
+  color-scheme: light;
+  --bg: #F2F4FF;
+  --paper: #FFFFFF;
+  --ink: #1B1640;
+  --muted: #4E4A72;
+  --faint: #6A668D;
+  --line: rgba(27, 22, 64, .14);
+  --gold: #FFD23F;
+  --pink: #FF5C9A;
+  --mint: #2ED3A5;
+  --bad: #C81E4A;
+  --good: #0B7F5E;
+  --warn: #9A5B00;
+  --c-food: #FF7A59;
+  --c-travel: #3DA5FF;
+  --c-shopping: #FF5C9A;
+  --c-bills: #FFC21F;
+  --c-education: #A58BFF;
+  --c-leisure: #17C3CE;
+  --c-health: #2FBF71;
+  --c-other: #9AA0B8;
+  --shadow: 4px 4px 0 var(--ink);
+  --display: "Unbounded", "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image: radial-gradient(rgba(27, 22, 64, .11) 1.2px, transparent 1.5px);
+  background-size: 22px 22px;
+  color: var(--ink);
+  font: 15px/1.5 var(--font);
+  padding-block: 18px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+h1, h2, p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--pink); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* drifting backdrop coins */
+.bgc { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.bgc i { position: absolute; display: block; width: var(--s); height: var(--s); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #FFF1A8, var(--gold) 62%); border: 3px solid var(--ink); opacity: .4; animation: cflip var(--t) ease-in-out infinite alternate; }
+.bgc i::after { content: ""; position: absolute; inset: 22%; border-radius: 50%; border: 2.5px solid var(--ink); opacity: .5; }
+
+.wrap { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "hero" "add" "board" "jars" "months" "tx" "foot"; }
+.a-top { grid-area: top; } .a-hero { grid-area: hero; } .a-add { grid-area: add; } .a-board { grid-area: board; }
+.a-jars { grid-area: jars; } .a-months { grid-area: months; } .a-tx { grid-area: tx; } .a-foot { grid-area: foot; }
+@media (min-width: 920px) {
+  .wrap { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); grid-template-areas: "top top" "hero board" "add board" "jars tx" "months tx" "foot foot"; align-items: start; }
+  .a-board, .a-tx { align-self: stretch; }
+  .rows { max-height: 640px; overflow-y: auto; }
+}
+
+.card { position: relative; background: var(--paper); border: 2.5px solid var(--ink); border-radius: 20px; box-shadow: var(--shadow); padding: 18px; min-width: 0; }
+.h2 { font: 700 15px var(--display); letter-spacing: -.02em; }
+.label { font: 700 11px var(--font); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.sub { color: var(--muted); font-size: 13.5px; }
+.readout { font: 12px var(--mono); color: var(--muted); text-align: right; }
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+
+/* header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 700 20px var(--display); letter-spacing: -.04em; }
+.logo { animation: coinspin 5s ease-in-out infinite; }
+.sel { position: relative; display: flex; align-items: center; height: 38px; padding: 0 30px 0 12px; border: 2.5px solid var(--ink); border-radius: 11px; background: #fff; box-shadow: 2px 2px 0 var(--ink); }
+.sel select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; outline: none; font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 0; }
+.sel::after { content: ""; position: absolute; right: 12px; top: 50%; width: 6px; height: 6px; margin-top: -5px; border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); transform: rotate(45deg); pointer-events: none; }
+.sel select option { color: #1B1640; background: #fff; }
+
+/* buttons */
+.sq { width: 38px; height: 38px; display: grid; place-items: center; padding: 0; border: 2.5px solid var(--ink); border-radius: 11px; background: #fff; box-shadow: 2px 2px 0 var(--ink); transition: transform .12s, box-shadow .12s; }
+.sq:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ink); }
+.sq:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+.sq:disabled { opacity: .35; cursor: default; box-shadow: none; }
+.sbtn { height: 34px; padding: 0 14px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; font-weight: 700; font-size: 13px; box-shadow: 2px 2px 0 var(--ink); transition: transform .12s, box-shadow .12s; }
+.sbtn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+.sbtn.danger { color: var(--bad); }
+.tlink { background: none; border: 0; padding: 2px 4px; font-weight: 700; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.btn { height: 52px; padding: 0 22px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--pink); color: var(--ink); font: 700 14px var(--display); letter-spacing: -.02em; box-shadow: 4px 4px 0 var(--ink); transition: transform .12s, box-shadow .12s; }
+.btn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
+.btn:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--ink); }
+.btn.small { height: 44px; padding: 0 18px; }
+
+/* hero */
+.hero { background: var(--gold); display: grid; gap: 14px; }
+.hero .label, .hero .sub { color: var(--ink); }
+.hero .sub { opacity: .82; }
+.monthnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.month { font: 700 15px var(--display); letter-spacing: -.02em; min-width: 11ch; text-align: center; }
+.total { font: 700 clamp(34px, 9vw, 54px)/1.05 var(--display); letter-spacing: -.05em; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.bud { display: grid; gap: 8px; }
+.rowb { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 28px; }
+.left { font: 700 18px var(--display); letter-spacing: -.03em; overflow-wrap: anywhere; }
+.meter { position: relative; height: 24px; border: 2.5px solid var(--ink); border-radius: 99px; background: #fff; overflow: hidden; }
+.mfill { position: absolute; inset: 0 auto 0 0; width: calc(var(--w, 0) * 100%); background-color: var(--mint); background-image: linear-gradient(135deg, rgba(255, 255, 255, .4) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .4) 50%, rgba(255, 255, 255, .4) 75%, transparent 75%); background-size: 28px 28px; border-right: 2.5px solid var(--ink); transition: width 1.1s cubic-bezier(.2, .8, .2, 1); animation: stripes 1s linear infinite; }
+.mfill.over { background-color: var(--pink); }
+.mfill.none { border-right: 0; }
+.mpace { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--ink); opacity: .55; }
+.pill { font-size: 12px; font-weight: 700; padding: 3px 11px; border: 2px solid var(--ink); border-radius: 99px; background: #fff; white-space: nowrap; }
+.good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+.bform { display: flex; gap: 8px; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.stat { background: #fff; border: 2px solid var(--ink); border-radius: 14px; padding: 10px 12px; display: grid; gap: 1px; min-width: 0; }
+.sv { font: 700 17px var(--display); letter-spacing: -.03em; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.sh { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* fields */
+.in { width: 100%; height: 52px; padding: 0 16px; border: 2.5px solid var(--ink); border-radius: 14px; background: #fff; font: 500 18px var(--font); outline: none; transition: box-shadow .15s; min-width: 0; }
+.in:focus { box-shadow: 4px 4px 0 var(--pink); }
+.in::placeholder { color: var(--faint); }
+.in.sm { height: 46px; font-size: 15px; padding: 0 12px; }
+.add { display: grid; gap: 12px; }
+.parsed { min-height: 44px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border: 2px dashed var(--ink); border-radius: 12px; background: #FAFAFF; font-size: 14px; color: var(--muted); }
+.parsed .tag { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; color: var(--ink); }
+.parsed .amtp { font: 500 15px var(--mono); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cc { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 2px solid var(--ink); border-radius: 99px; background: #fff; font-size: 13px; font-weight: 500; transition: transform .12s, background-color .15s; }
+.cc:hover { transform: translateY(-1px); }
+.cc[aria-pressed="true"] { background: var(--cc, var(--ink)); font-weight: 700; box-shadow: 2px 2px 0 var(--ink); }
+.cc.auto[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.addrow { display: flex; gap: 10px; align-items: center; }
+.addrow .in { flex: 0 0 156px; }
+.addrow .btn { flex: 1; }
+.err { color: var(--bad); font-weight: 500; font-size: 13px; }
+.shake { animation: shake .35s; }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: var(--cc, var(--c-other)); border: 2px solid var(--ink); flex: none; }
+
+/* board */
+.bwrap { position: relative; border: 2.5px solid var(--ink); border-radius: 14px; background: linear-gradient(180deg, #F4F6FF, #FFFFFF 70%); overflow: hidden; }
+.bwrap canvas { display: block; width: 100%; touch-action: manipulation; }
+
+/* jars */
+.jars { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.jar { display: grid; gap: 3px; text-align: left; padding: 12px; border: 2px solid var(--ink); border-radius: 14px; background: #fff; transition: transform .15s, background-color .15s, box-shadow .15s; min-width: 0; }
+.jar:hover { transform: translateY(-2px); box-shadow: 3px 3px 0 var(--ink); }
+.jar[aria-pressed="true"] { background: color-mix(in srgb, var(--cc) 34%, #fff); box-shadow: 3px 3px 0 var(--ink); }
+.jt { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.ja { font: 500 17px var(--mono); letter-spacing: -.02em; overflow-wrap: anywhere; }
+.jp { font-size: 12px; color: var(--muted); }
+.jbar { display: block; height: 9px; margin-top: 4px; border: 2px solid var(--ink); border-radius: 99px; background: #fff; overflow: hidden; }
+.jbar i { display: block; height: 100%; background: var(--cc); transform-origin: left; }
+.jars.anim .jbar i { animation: growx .9s cubic-bezier(.2, .8, .2, 1) both; }
+
+/* months */
+.mchart { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.mcol { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; padding: 6px 0 4px; border: 0; background: none; border-radius: 12px; min-width: 0; }
+.mcol:hover .mbar { transform: translateY(-3px); }
+.mcol[aria-pressed="true"] { background: rgba(255, 210, 63, .45); }
+.mval { font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.mbarw { display: flex; align-items: flex-end; height: 150px; width: 100%; padding: 0 3px; }
+.mbar { display: flex; flex-direction: column-reverse; width: 100%; height: calc(var(--p, 0) * 150px); min-height: 6px; border: 2.5px solid var(--ink); border-radius: 8px 8px 3px 3px; overflow: hidden; background: #fff; transform-origin: bottom; transition: transform .2s; }
+.mbar .seg { flex: var(--v) 1 0; min-height: 0; background: var(--cc); }
+.mbar .seg + .seg { box-shadow: 0 -2px 0 var(--ink); }
+.mchart.anim .mbar { animation: growy .9s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i) * 80ms); }
+.mlab { font-size: 12px; font-weight: 700; }
+.mcol[aria-pressed="true"] .mlab { text-decoration: underline; text-underline-offset: 3px; }
+
+/* transactions */
+.txh { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.txb { display: flex; gap: 8px; }
+.exnote { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px 9px 14px; margin-bottom: 10px; border: 2px dashed var(--ink); border-radius: 12px; background: #FFF8D6; font-size: 13px; }
+.fchips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.csvbox { width: 100%; min-height: 90px; margin-bottom: 8px; padding: 10px; border: 2px solid var(--ink); border-radius: 12px; font: 12px var(--mono); resize: vertical; background: #fff; }
+.day { display: flex; justify-content: space-between; gap: 12px; padding: 14px 2px 6px; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-bottom: 2px dashed var(--line); }
+.row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto 30px; gap: 12px; align-items: center; padding: 10px 2px; border-bottom: 2px dashed var(--line); transition: background-color .15s; }
+.row:hover { background: #FAFAFF; }
+.bdg { display: grid; place-items: center; width: 34px; height: 34px; border: 2px solid var(--ink); border-radius: 50%; background: var(--cc); font: 700 13px var(--font); }
+.row .t { min-width: 0; display: grid; }
+.row .tn { overflow-wrap: anywhere; font-weight: 700; }
+.row .tc { font-size: 12.5px; color: var(--muted); }
+.row .amt { font: 500 14px var(--mono); }
+.del { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 9px; background: none; color: var(--muted); }
+.del:hover { background: rgba(200, 30, 74, .12); color: var(--bad); }
+.row.fresh { animation: fresh .9s ease-out; }
+.row.leaving { animation: leave .2s ease-in forwards; }
+.empty { padding: 30px 10px; text-align: center; color: var(--muted); }
+.skel { height: 48px; margin: 10px 0; border: 2px solid var(--line); border-radius: 12px; background: linear-gradient(90deg, #F2F4FF, #fff, #F2F4FF); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+
+.foot { display: flex; justify-content: center; color: var(--faint); font-size: 12px; }
+.toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); padding: 11px 12px 11px 18px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--ink); color: #fff; font-size: 14px; z-index: 40; box-shadow: 4px 4px 0 var(--pink); animation: toast .3s cubic-bezier(.2, .8, .2, 1); }
+.toast .tlink { color: var(--gold); }
+.rise { animation: rise .6s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: var(--d, 0s); }
+
+@keyframes rise { from { opacity: .3; transform: translateY(14px); } }
+@keyframes cflip { from { transform: translate3d(0, 0, 0) rotateY(0); } to { transform: translate3d(var(--dx), var(--dy), 0) rotateY(200deg); } }
+@keyframes coinspin { 0%, 55%, 100% { transform: rotateY(0); } 80% { transform: rotateY(180deg); } }
+@keyframes stripes { to { background-position: 28px 0; } }
+@keyframes growx { from { transform: scaleX(0); } }
+@keyframes growy { from { transform: scaleY(0); } }
+@keyframes fresh { from { background: #FFF1A8; opacity: .3; transform: translateY(-10px); } }
+@keyframes leave { to { opacity: 0; transform: translateX(16px); } }
+@keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes toast { from { opacity: 0; transform: translate(-50%, 10px); } }
+
+@media (max-width: 420px) {
+  .addrow { flex-wrap: wrap; }
+  .addrow .in { flex: 1 1 100%; }
+  .addrow .btn { flex: 1 1 100%; }
+}
+@media (hover: none) { .del { color: var(--faint); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="bgc" aria-hidden="true">
+  <i style="--s:92px;left:4%;top:16%;--t:13s;--dx:30px;--dy:50px"></i>
+  <i style="--s:56px;left:90%;top:10%;--t:10s;--dx:-24px;--dy:40px"></i>
+  <i style="--s:120px;left:84%;top:58%;--t:16s;--dx:-30px;--dy:-50px"></i>
+  <i style="--s:48px;left:8%;top:70%;--t:9s;--dx:26px;--dy:-36px"></i>
+  <i style="--s:70px;left:48%;top:88%;--t:12s;--dx:40px;--dy:-30px"></i>
+</div>
+
+<div class="wrap">
+  <header class="top a-top">
+    <p class="brand">
+      <svg class="logo" width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="14.500" fill="#FFD23F" stroke="#1B1640" stroke-width="3"/><circle cx="17" cy="17" r="8" fill="none" stroke="#1B1640" stroke-width="2.500"/><path d="M11 10a8.500 8.500 0 0 1 6-2" stroke="#fff" stroke-width="2.500" stroke-linecap="round" fill="none"/></svg>
+      <span>Coin Drop</span>
+    </p>
+    <label class="sel"><span class="sr">Currency</span>
+      <select id="cur">
+        <option value="INR">INR ₹</option>
+        <option value="USD">USD $</option>
+        <option value="EUR">EUR €</option>
+        <option value="GBP">GBP £</option>
+      </select>
+    </label>
+  </header>
+
+  <section class="card hero a-hero rise" aria-labelledby="h-month">
+    <div class="monthnav">
+      <button class="sq" id="prev" type="button" aria-label="Previous month"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.500 4.500 7 10l5.500 5.500"/></svg></button>
+      <h2 class="month" id="h-month">November 2026</h2>
+      <button class="sq" id="next" type="button" aria-label="Next month"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.500 4.500 13 10l-5.500 5.500"/></svg></button>
+      <button class="tlink" id="today" type="button" hidden>Back to today</button>
+    </div>
+    <div>
+      <div class="label">Spent</div>
+      <div class="total" id="total">0</div>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="bud">
+      <div class="rowb"><span class="label">Monthly budget</span><button class="tlink" id="editBudget" type="button">Edit</button></div>
+      <div class="meter"><div class="mfill" id="mfill"></div><div class="mpace" id="mpace" hidden title="Where an even spending pace would be today"></div></div>
+      <div class="rowb"><span class="left" id="left"></span><span class="pill" id="status" hidden></span></div>
+      <div class="sub" id="bsub"></div>
+      <form class="bform" id="bform" hidden autocomplete="off">
+        <input class="in sm" id="binput" inputmode="decimal" placeholder="Monthly budget" aria-label="Monthly budget">
+        <button class="btn small" type="submit">Save</button>
+      </form>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="label">Daily average</span><span class="sv" id="tAvg">0</span><span class="sh" id="tAvgH"></span></div>
+      <div class="stat"><span class="label">Biggest drop</span><span class="sv" id="tBig">0</span><span class="sh" id="tBigH"></span></div>
+    </div>
+  </section>
+
+  <form class="card add a-add rise" id="add" style="--d:.06s" autocomplete="off" novalidate>
+    <div class="head" style="margin:0"><h2 class="h2">Drop an expense</h2><span class="readout">amount first, then what</span></div>
+    <input class="in" id="quick" aria-label="Expense, for example 120 chai with friends" placeholder="120 chai with friends" enterkeyhint="done" autocapitalize="none" spellcheck="false">
+    <div class="parsed" id="parsed" role="status" aria-live="polite"></div>
+    <div class="chips" id="pick" role="group" aria-label="Category"></div>
+    <div class="addrow">
+      <input class="in sm" id="date" type="date" aria-label="Date">
+      <button class="btn" type="submit">Drop it</button>
+    </div>
+    <p class="err" id="err" role="alert" hidden></p>
+  </form>
+
+  <section class="card a-board rise" style="--d:.12s" aria-labelledby="h-board">
+    <div class="head"><h2 class="h2" id="h-board">Drop zone</h2><span class="readout" id="bcount">Tap a bin to filter</span></div>
+    <div class="bwrap" id="bwrap"><canvas id="board" role="img" aria-label="Coin stacks for each spending category this month"></canvas></div>
+  </section>
+
+  <section class="card a-jars rise" style="--d:.18s" aria-labelledby="h-jars">
+    <div class="head"><h2 class="h2" id="h-jars">Where it went</h2><span class="readout" id="jcount"></span></div>
+    <div class="jars" id="jars"></div>
+  </section>
+
+  <section class="card a-months rise" style="--d:.24s" aria-labelledby="h-months">
+    <div class="head"><h2 class="h2" id="h-months">Last 6 months</h2><span class="readout">Tap a bar to open it</span></div>
+    <div class="mchart" id="mchart"></div>
+  </section>
+
+  <section class="card a-tx rise" style="--d:.3s" aria-labelledby="h-tx">
+    <div class="txh">
+      <h2 class="h2" id="h-tx">Transactions</h2>
+      <div class="txb"><button class="sbtn" id="csv" type="button">Copy CSV</button><button class="sbtn danger" id="clear" type="button">Clear all</button></div>
+    </div>
+    <textarea class="csvbox" id="csvbox" readonly hidden aria-label="CSV text to copy"></textarea>
+    <div class="exnote" id="exnote" hidden><span>Example entries. Drop your first expense to replace them.</span><button class="tlink" id="clearEx" type="button">Clear examples</button></div>
+    <div class="fchips" id="fchips"></div>
+    <div class="rows" id="rows"></div>
+  </section>
+
+  <footer class="foot a-foot"><span id="sync"></span></footer>
+</div>
+
+<div class="toast" id="toast" role="status" hidden><span id="tmsg"></span><button class="tlink" id="undo" type="button" hidden>Undo</button></div>
+
+<script>
+(() => {
+  'use strict';
+  const CATS = [['food', 'Food', 'F'], ['travel', 'Travel', 'T'], ['shopping', 'Shopping', 'S'], ['bills', 'Bills', 'B'], ['education', 'Education', 'E'], ['leisure', 'Leisure', 'L'], ['health', 'Health', 'H'], ['other', 'Other', 'O']];
+  const NAME = Object.fromEntries(CATS.map((c) => [c[0], c[1]]));
+  const LET = Object.fromEntries(CATS.map((c) => [c[0], c[2]]));
+  const LOC = { INR: 'en-IN', USD: 'en-US', EUR: 'en-IE', GBP: 'en-GB' };
+  const SCALE = { INR: 1, USD: 0.012, EUR: 0.011, GBP: 0.0095 };
+  const DEF_BUDGET = { INR: 10000, USD: 130, EUR: 120, GBP: 100 };
+  const KEY = 'coin-drop-v1';
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const TAU = Math.PI * 2;
+  const $ = (id) => document.getElementById(id);
+  const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const pad = (n) => String(n).padStart(2, '0');
+  const ymd = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+  const defCur = /^Asia\/(Kolkata|Calcutta)$/.test(tz) ? 'INR' : 'USD';
+
+  const state = {
+    items: [], budget: DEF_BUDGET[defCur], currency: defCur, examples: false, ready: false,
+    filter: null, pick: null, view: { y: today.getFullYear(), m: today.getMonth() }
+  };
+
+  /* ---------- helpers ---------- */
+  function h(tag, attrs, ...kids) {
+    const e = document.createElement(tag);
+    for (const k in (attrs || {})) {
+      const v = attrs[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') e.className = v; else e.setAttribute(k, v === true ? '' : v);
+    }
+    kids.flat().forEach((c) => { if (c != null && c !== false) e.append(c); });
+    return e;
+  }
+  const nfCache = {};
+  function fmt(n) {
+    const frac = Math.abs(n - Math.round(n)) > 0.004;
+    const key = state.currency + (frac ? 2 : 0);
+    if (!nfCache[key]) {
+      nfCache[key] = new Intl.NumberFormat(LOC[state.currency], { style: 'currency', currency: state.currency, minimumFractionDigits: frac ? 2 : 0, maximumFractionDigits: frac ? 2 : 0 });
+    }
+    return nfCache[key].format(n);
+  }
+  function symbol() {
+    try { return new Intl.NumberFormat(LOC[state.currency], { style: 'currency', currency: state.currency, currencyDisplay: 'narrowSymbol' }).formatToParts(0).find((p) => p.type === 'currency').value; }
+    catch (e) { return state.currency; }
+  }
+  function compact(n) {
+    if (!n) return '–';
+    try { return symbol() + new Intl.NumberFormat(LOC[state.currency], { notation: 'compact', maximumFractionDigits: 1 }).format(n); }
+    catch (e) { return symbol() + Math.round(n); }
+  }
+  const sum = (a) => a.reduce((s, i) => s + i.amt, 0);
+  const daysIn = (v) => new Date(v.y, v.m + 1, 0).getDate();
+  const ymIndex = (y, m) => y * 12 + m;
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const viewIdx = () => ymIndex(state.view.y, state.view.m);
+  const nowIdx = () => ymIndex(today.getFullYear(), today.getMonth());
+  const viewKey = () => state.view.y + '-' + pad(state.view.m + 1);
+  const monthItems = () => state.items.filter((i) => i.date.startsWith(viewKey() + '-'));
+  const byNewest = (a, b) => b.date.localeCompare(a.date) || (b.t - a.t);
+  const totalsBy = (items) => { const t = {}; items.forEach((i) => { t[i.cat] = (t[i.cat] || 0) + i.amt; }); return t; };
+  const shortDate = (s) => new Date(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+  function countTo(el, to, f) {
+    f = f || fmt;
+    const from = el._v == null ? 0 : el._v;
+    el._v = to;
+    cancelAnimationFrame(el._raf);
+    if (RM || from === to) { el.textContent = f(to); return; }
+    const t0 = performance.now(), dur = 800;
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = p < 1 ? f(Math.round(from + (to - from) * e)) : f(to);
+      if (p < 1) el._raf = requestAnimationFrame(step);
+    };
+    el._raf = requestAnimationFrame(step);
+  }
+
+  /* ---------- smart quick-add ---------- */
+  const KW = {
+    food: 'chai tea coffee lunch dinner breakfast snack snacks pizza burger canteen biryani grocery groceries vada pav juice swiggy zomato restaurant cafe food samosa maggi treat meal tiffin dosa idli sandwich momos chaat',
+    travel: 'metro bus train auto cab uber ola rapido petrol fuel ticket flight taxi rickshaw ride parking toll commute',
+    shopping: 'shirt shoes amazon flipkart myntra clothes bag gift mall jeans watch shopping tshirt sneakers case',
+    bills: 'rent recharge electricity wifi broadband bill internet gas water subscription emi insurance mobile hostel',
+    education: 'book notebook pen course fees fee exam college stationery print printout xerox tuition udemy project study',
+    leisure: 'movie game netflix spotify party concert outing bowling gaming hotstar prime fun',
+    health: 'medicine pharmacy doctor gym clinic hospital dentist vitamins medical checkup'
+  };
+  const WORD = {};
+  Object.keys(KW).forEach((k) => KW[k].split(/\s+/).forEach((w) => { if (w) WORD[w] = k; }));
+  function guess(text) {
+    const ws = String(text).toLowerCase().split(/[^a-z]+/);
+    for (const w of ws) { if (!w) continue; const c = WORD[w] || WORD[w.replace(/(es|s)$/, '')]; if (c) return c; }
+    return 'other';
+  }
+  function parseQuick(raw) {
+    let text = String(raw), when = null;
+    if (/\byesterday\b/i.test(text)) { when = 'yesterday'; text = text.replace(/\byesterday\b/ig, ' '); }
+    else if (/\btoday\b/i.test(text)) { when = 'today'; text = text.replace(/\btoday\b/ig, ' '); }
+    const m = text.match(/(?:₹|\$|€|£|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d{1,2})?)\s*(k\b)?/i);
+    let amt = null;
+    if (m) {
+      amt = parseFloat(m[1].replace(/,/g, '')); if (m[2]) amt *= 1000;
+      amt = Math.round(amt * 100) / 100; text = text.replace(m[0], ' ');
+    }
+    const note = text.replace(/\s+/g, ' ').replace(/^[\s\-–,.:]+|[\s\-–,.:]+$/g, '').slice(0, 80);
+    return { amt, note, when };
+  }
+
+  /* ---------- sample data: six months ---------- */
+  const TPL = [
+    [1, 'bills', 1249, 'Broadband'], [1, 'food', 190, 'Chai and bun maska'], [2, 'travel', 500, 'Metro card recharge'],
+    [3, 'education', 260, 'Notebooks and pens'], [3, 'food', 120, 'Lunch at canteen'], [4, 'leisure', 450, 'Movie night'],
+    [5, 'shopping', 900, 'Phone case'], [6, 'health', 180, 'Pharmacy'], [7, 'food', 340, 'Dinner with friends'],
+    [8, 'travel', 240, 'Cab home'], [9, 'bills', 300, 'Mobile recharge'], [10, 'education', 650, 'Printouts and project file'],
+    [12, 'food', 210, 'Pizza slice'], [14, 'leisure', 400, 'Streaming plan'], [16, 'shopping', 1800, 'Sneakers'],
+    [18, 'travel', 420, 'Bus pass'], [21, 'health', 1200, 'Gym month'], [24, 'education', 1500, 'Course fee'],
+    [26, 'food', 560, 'Birthday treat'], [28, 'bills', 1800, 'Hostel utilities']
+  ];
+  const MF = [0.62, 0.7, 0.58, 0.74, 0.66, 0.8];
+  function makeSamples() {
+    const k = SCALE[state.currency], out = [];
+    for (let back = 5; back >= 0; back--) {
+      const d0 = new Date(today.getFullYear(), today.getMonth() - back, 1), f = MF[5 - back];
+      const dim = new Date(d0.getFullYear(), d0.getMonth() + 1, 0).getDate();
+      TPL.forEach((r, i) => {
+        if (back === 0 && r[0] > today.getDate()) return;
+        const day = Math.min(r[0], dim);
+        let a = Math.max(10, Math.round(r[2] * f / 10) * 10) * k;
+        if (state.currency !== 'INR') a = Math.max(1, Math.round(a));
+        out.push({ id: 's' + back + '_' + i, amt: a, cat: r[1], note: r[3], date: ymd(new Date(d0.getFullYear(), d0.getMonth(), day)), t: 1e12 - (back * 100 + i) });
+      });
+    }
+    return out;
+  }
+
+  /* ---------- the drop board (canvas) ---------- */
+  const cv = $('board'), ctx = cv.getContext('2d');
+  const css = getComputedStyle(document.documentElement);
+  const cvar = (n) => css.getPropertyValue(n).trim();
+  const INK = cvar('--ink') || '#1B1640', PINK = cvar('--pink') || '#FF5C9A';
+  const COL = Object.fromEntries(CATS.map((c) => [c[0], cvar('--c-' + c[0]) || '#9AA0B8']));
+  const BINS = CATS.length, MAXSTACK = 7;
+  let ROWS = 8;
+  const G = { w: 0, h: 0, bw: 0, binTop: 0, floor: 0, pegTop: 0, rowGap: 0, cr: 10, pegR: 4, ch: 9, dpr: 1 };
+  let coins = [], flashes = new Map(), pulses = new Map(), hoverBin = -1, raf = 0, monthTotals = {};
+
+  function layout() {
+    const w = Math.max(260, Math.floor($('bwrap').clientWidth));
+    const hh = Math.round(Math.min(680, Math.max(380, w * (w > 520 ? 1.25 : 1.1))));
+    ROWS = hh >= 560 ? 10 : 8;
+    G.dpr = Math.min(3, window.devicePixelRatio || 1);
+    cv.width = Math.round(w * G.dpr); cv.height = Math.round(hh * G.dpr); cv.style.height = hh + 'px';
+    G.w = w; G.h = hh; G.bw = w / BINS; G.floor = hh - 4; G.binTop = G.floor - 108; G.pegTop = 34;
+    G.rowGap = (G.binTop - 24 - G.pegTop) / (ROWS - 1);
+    G.cr = Math.min(10, G.bw * 0.24); G.pegR = Math.min(4.2, G.bw * 0.09); G.ch = Math.max(7, Math.min(10, G.bw * 0.22));
+    redraw();
+  }
+  function dispTotals() {
+    const t = Object.assign({}, monthTotals), vk = viewKey();
+    for (const c of coins) { if (!c.ghost && c.mkey === vk) t[c.cat] = (t[c.cat] || 0) - c.amt; }
+    return t;
+  }
+  function stackCounts(t) {
+    const mx = Math.max(0, ...CATS.map((c) => t[c[0]] || 0)), o = {};
+    CATS.forEach((c) => { const v = t[c[0]] || 0; o[c[0]] = v > 0.005 ? Math.max(1, Math.round(MAXSTACK * v / mx)) : 0; });
+    return o;
+  }
+  function rr(x, y, w, hh, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + hh, r); ctx.arcTo(x + w, y + hh, x, y + hh, r);
+    ctx.arcTo(x, y + hh, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function drawCoin(x, y, r, color, rot) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fillStyle = color; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.58, 0, TAU); ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(27,22,64,.55)'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.78, Math.PI * 1.1, Math.PI * 1.55); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.stroke();
+    ctx.restore();
+  }
+  function draw(now) {
+    const d = G.dpr; ctx.setTransform(d, 0, 0, d, 0, 0); ctx.clearRect(0, 0, G.w, G.h);
+    const cnt = stackCounts(dispTotals());
+    const base = G.floor - 30, pw = G.bw * 0.66;
+    CATS.forEach(([k], i) => {
+      const x0 = i * G.bw, sel = state.filter === k, hov = hoverBin === i;
+      let a = 0.15 + (hov ? 0.1 : 0) + (sel ? 0.25 : 0);
+      const p = pulses.get(k); if (p) { const u = (now - p) / 520; if (u < 1) a += (1 - u) * 0.45; }
+      ctx.globalAlpha = Math.min(0.9, a); ctx.fillStyle = COL[k]; ctx.fillRect(x0 + 1.5, G.binTop, G.bw - 3, G.floor - G.binTop); ctx.globalAlpha = 1;
+      for (let s = 0; s < cnt[k]; s++) {
+        const y = base - G.ch * (s + 1), x = x0 + (G.bw - pw) / 2;
+        rr(x, y, pw, G.ch, Math.min(4, G.ch / 2)); ctx.fillStyle = COL[k]; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(x + 4, y + 2.5, pw * 0.28, 1.8);
+      }
+      const br = Math.min(10, G.bw * 0.28), bx = x0 + G.bw / 2, by = G.floor - 15;
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, TAU); ctx.fillStyle = COL[k]; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = INK; ctx.font = '700 ' + Math.max(9, Math.min(12, G.bw * 0.28)) + 'px "DM Sans", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(LET[k], bx, by + 0.5);
+    });
+    ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (let i = 1; i < BINS; i++) { ctx.beginPath(); ctx.moveTo(i * G.bw, G.binTop); ctx.lineTo(i * G.bw, G.floor); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(0, G.floor); ctx.lineTo(G.w, G.floor); ctx.stroke();
+    for (let r = 0; r < ROWS; r++) {
+      const y = G.pegTop + r * G.rowGap, even = r % 2 === 0, cols = even ? BINS : BINS - 1;
+      for (let c = 0; c < cols; c++) {
+        const x = even ? G.bw * (c + 0.5) : G.bw * (c + 1), f = flashes.get(r * 100 + c);
+        let rad = G.pegR, fill = INK;
+        if (f !== undefined) { const u = (now - f) / 280; if (u < 1) { rad = G.pegR * (1 + 1.3 * (1 - u)); fill = PINK; } }
+        ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU); ctx.fillStyle = fill; ctx.fill();
+      }
+    }
+    for (const c of coins) { if (c.segT0 == null) continue; drawCoin(c.x, c.y, G.cr, COL[c.cat], c.rot); }
+  }
+  function redraw() { if (!raf && G.w) draw(performance.now()); }
+  function kick() { if (!raf) raf = requestAnimationFrame(frame); }
+
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function makePath(j) {
+    const N = BINS, S = ROWS;
+    for (let tries = 0; tries < 60; tries++) {
+      const lo = Math.max(0, j - S / 2), hi = Math.min(N - 1, j + S / 2);
+      const i0 = lo + Math.floor(Math.random() * (hi - lo + 1)), plus = S / 2 + (j - i0);
+      if (plus < 0 || plus > S) continue;
+      const steps = shuffle(Array.from({ length: S }, (_, i) => (i < plus ? 1 : -1)));
+      let u = 2 * i0 + 1, ok = true; const p = [u];
+      for (const s of steps) { u += s; if (u < 1 || u > 2 * N - 1) { ok = false; break; } p.push(u); }
+      if (ok) return p;
+    }
+    const first = (2 * j + 2 > 2 * N - 1) ? -1 : 1, p = [2 * j + 1];
+    for (let k = 0; k < S; k++) p.push(p[k] + (k % 2 === 0 ? first : -first));
+    return p;
+  }
+  const pegKey = (r, u) => r * 100 + (r % 2 === 0 ? (u - 1) / 2 : u / 2 - 1);
+
+  function spawn(cat, amt, mkey, ghost, delay) {
+    if (RM || !G.w) return;
+    const j = CATS.findIndex((c) => c[0] === cat); if (j < 0) return;
+    const path = makePath(j), xs = path.map((u) => u * G.bw / 2);
+    const restY = (r) => G.pegTop + r * G.rowGap - G.pegR - G.cr;
+    const sf = Math.max(1, Math.sqrt(G.rowGap / 30));
+    const segs = [{ type: 'fall', x1: xs[0], y1: restY(0), dur: 230 * sf, peg: pegKey(0, path[0]) }];
+    for (let k = 1; k < ROWS; k++) segs.push({ type: 'hop', x1: xs[k], y1: restY(k), dur: (150 + Math.random() * 50) * sf, peg: pegKey(k, path[k]) });
+    segs.push({ type: 'land', x1: xs[ROWS], dur: 300 * sf });
+    coins.push({ cat, amt, mkey, ghost: !!ghost, segs, i: 0, segT0: null, start: performance.now() + (delay || 0), x: xs[0], y: -G.cr * 2, rot: 0, spin: (Math.random() < 0.5 ? -1 : 1) * (6 + Math.random() * 4) });
+    kick();
+  }
+  function begin(c) {
+    const sg = c.segs[c.i]; sg.x0 = c.x; sg.y0 = c.y;
+    if (sg.type === 'land') { const n = stackCounts(dispTotals())[c.cat] || 0; sg.y1 = G.floor - 30 - G.ch * n - G.cr; }
+  }
+  function place(c, sg, u) {
+    if (sg.type === 'hop') {
+      const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+      c.x = sg.x0 + (sg.x1 - sg.x0) * e;
+      c.y = sg.y0 + (sg.y1 - sg.y0) * u * u - G.rowGap * 0.3 * Math.sin(Math.PI * u) * (1 - u);
+    } else if (sg.type === 'fall') {
+      c.x = sg.x0 + (sg.x1 - sg.x0) * u; c.y = sg.y0 + (sg.y1 - sg.y0) * u * u;
+    } else {
+      const e = 1 - Math.pow(1 - u, 2);
+      c.x = sg.x0 + (sg.x1 - sg.x0) * e; c.y = sg.y0 + (sg.y1 - sg.y0) * u * u;
+    }
+  }
+  function update(now) {
+    for (let i = coins.length - 1; i >= 0; i--) {
+      const c = coins[i];
+      if (c.segT0 == null) { if (now < c.start) continue; c.segT0 = c.start; begin(c); }
+      let sg = c.segs[c.i], u = (now - c.segT0) / sg.dur, done = false;
+      while (u >= 1) {
+        c.x = sg.x1; c.y = sg.y1;
+        if (sg.peg != null) flashes.set(sg.peg, c.segT0 + sg.dur);
+        c.segT0 += sg.dur; c.i++;
+        if (c.i >= c.segs.length) { done = true; break; }
+        begin(c); sg = c.segs[c.i]; u = (now - c.segT0) / sg.dur;
+      }
+      if (done) { pulses.set(c.cat, now); coins.splice(i, 1); continue; }
+      place(c, sg, Math.max(0, u));
+      c.rot = c.spin * (now - c.start) / 1000;
+    }
+  }
+  function frame(ts) {
+    raf = 0; update(ts); draw(ts);
+    flashes.forEach((t, k) => { if (ts - t > 300) flashes.delete(k); });
+    pulses.forEach((t, k) => { if (ts - t > 560) pulses.delete(k); });
+    if (coins.length || flashes.size || pulses.size) raf = requestAnimationFrame(frame);
+  }
+  const binAt = (e) => {
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    return y > G.binTop - 6 ? Math.min(BINS - 1, Math.max(0, Math.floor(x / G.bw))) : -1;
+  };
+  cv.addEventListener('pointermove', (e) => { const i = binAt(e); if (i !== hoverBin) { hoverBin = i; cv.style.cursor = i >= 0 ? 'pointer' : 'default'; redraw(); } });
+  cv.addEventListener('pointerleave', () => { hoverBin = -1; redraw(); });
+  cv.addEventListener('click', (e) => { const i = binAt(e); if (i < 0) return; const k = CATS[i][0]; state.filter = state.filter === k ? null : k; render(false); });
+  let introDone = false;
+  function intro() {
+    if (introDone || RM) return; introDone = true;
+    const cats = CATS.map((c) => c[0]).filter((k) => (monthTotals[k] || 0) > 0);
+    if (!cats.length) return;
+    [250, 700, 1150].forEach((d, i) => spawn(cats[(i * 2) % cats.length], 0, viewKey(), true, d));
+  }
+  if (window.ResizeObserver) new ResizeObserver(() => { const w = Math.floor($('bwrap').clientWidth); if (w && w !== G.w) { coins.length = 0; layout(); } }).observe($('bwrap'));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+
+  /* ---------- render ---------- */
+  let freshId = null;
+  function render(animate) {
+    const items = monthItems().sort(byNewest);
+    monthTotals = totalsBy(items);
+    renderHero(items); renderJars(items, animate); renderMonths(animate); renderList(items); updatePreview();
+    $('cur').value = state.currency;
+    $('exnote').hidden = !state.examples;
+    $('bcount').textContent = state.filter ? NAME[state.filter] + ' selected' : 'Tap a bin to filter';
+    cv.setAttribute('aria-label', 'Coin stacks for each spending category, ' + new Date(state.view.y, state.view.m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }));
+    if (G.w) { redraw(); if (coins.length) kick(); }
+  }
+
+  function renderHero(items) {
+    const dim = daysIn(state.view), cur = viewIdx() === nowIdx(), past = viewIdx() < nowIdx();
+    const total = sum(items), elapsed = cur ? today.getDate() : (past ? dim : 0);
+    $('h-month').textContent = new Date(state.view.y, state.view.m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    $('today').hidden = cur; $('next').disabled = viewIdx() >= nowIdx();
+    countTo($('total'), total);
+    $('sub').textContent = items.length ? items.length + (items.length === 1 ? ' expense' : ' expenses') + (elapsed ? ' across ' + elapsed + (elapsed === 1 ? ' day' : ' days') : '') : 'No expenses this month';
+    const b = state.budget, pct = b ? total / b : 0, frac = cur ? today.getDate() / dim : null;
+    const fill = $('mfill'); fill.classList.toggle('over', pct > 1); fill.classList.toggle('none', pct <= 0);
+    requestAnimationFrame(() => requestAnimationFrame(() => fill.style.setProperty('--w', Math.min(pct, 1))));
+    const pace = $('mpace'); pace.hidden = frac == null; if (frac != null) pace.style.left = (frac * 100) + '%';
+    const left = b - total;
+    $('left').textContent = left >= 0 ? fmt(left) + ' left' : fmt(-left) + ' over';
+    $('bsub').textContent = Math.round(pct * 100) + '% of ' + fmt(b) + (cur ? ' · even pace today ' + fmt(Math.round(b * frac)) : '');
+    const st = $('status'); st.hidden = false;
+    let cls = 'good', txt = 'Within budget';
+    if (viewIdx() > nowIdx()) st.hidden = true;
+    else if (total > b) { cls = 'bad'; txt = 'Over budget'; }
+    else if (cur) { if (total <= b * frac) txt = 'Under pace'; else { cls = 'warn'; txt = 'Ahead of pace'; } }
+    st.className = 'pill ' + cls; st.textContent = txt;
+    countTo($('tAvg'), elapsed ? Math.round(total / elapsed) : 0);
+    $('tAvgH').textContent = elapsed ? 'per day' : 'no days yet';
+    const big = items.reduce((m, i) => (!m || i.amt > m.amt ? i : m), null);
+    countTo($('tBig'), big ? big.amt : 0);
+    $('tBigH').textContent = big ? (big.note || NAME[big.cat]) + ' · ' + shortDate(big.date) : 'nothing yet';
+  }
+
+  function renderJars(items, animate) {
+    const el = $('jars'); el.textContent = ''; el.classList.toggle('anim', !!animate && !RM);
+    const tot = sum(items);
+    $('jcount').textContent = tot ? fmt(tot) + ' in total' : '';
+    CATS.forEach(([k, n], idx) => {
+      const v = monthTotals[k] || 0, pct = tot ? v / tot : 0;
+      const bar = h('span', { class: 'jbar' }, h('i')); bar.firstChild.style.width = (pct * 100) + '%'; bar.firstChild.style.animationDelay = (idx * 50) + 'ms';
+      const dot = h('i', { class: 'dot' });
+      const b = h('button', { type: 'button', class: 'jar', 'data-cat': k, 'aria-pressed': state.filter === k ? 'true' : 'false' },
+        h('span', { class: 'jt' }, dot, n), h('span', { class: 'ja' }, fmt(v)), h('span', { class: 'jp' }, v ? Math.round(pct * 100) + '% of spending' : 'Empty'), bar);
+      b.style.setProperty('--cc', 'var(--c-' + k + ')');
+      el.append(b);
+    });
+  }
+
+  function renderMonths(animate) {
+    const el = $('mchart'); el.textContent = ''; el.classList.toggle('anim', !!animate && !RM);
+    const list = [];
+    for (let back = 5; back >= 0; back--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - back, 1), key = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-';
+      const its = state.items.filter((i) => i.date.startsWith(key));
+      list.push({ y: d.getFullYear(), m: d.getMonth(), label: d.toLocaleDateString(undefined, { month: 'short' }), by: totalsBy(its), total: sum(its) });
+    }
+    const max = Math.max(0, ...list.map((x) => x.total));
+    list.forEach((x, i) => {
+      const bar = h('span', { class: 'mbar' });
+      bar.style.setProperty('--p', max ? x.total / max : 0);
+      CATS.forEach(([k]) => { const v = x.by[k]; if (v > 0) { const s = h('i', { class: 'seg' }); s.style.setProperty('--v', v); s.style.setProperty('--cc', 'var(--c-' + k + ')'); bar.append(s); } });
+      const sel = x.y === state.view.y && x.m === state.view.m;
+      const col = h('button', { type: 'button', class: 'mcol', 'data-y': x.y, 'data-m': x.m, 'aria-pressed': sel ? 'true' : 'false', 'aria-label': x.label + ' ' + x.y + ': ' + (x.total ? fmt(x.total) : 'no spending') },
+        h('span', { class: 'mval' }, compact(x.total)), h('span', { class: 'mbarw' }, bar), h('span', { class: 'mlab' }, x.label));
+      col.style.setProperty('--i', i); bar.style.setProperty('--i', i);
+      el.append(col);
+    });
+  }
+
+  function chip(label, on, fn) { const b = h('button', { type: 'button', class: 'cc', 'aria-pressed': on ? 'true' : 'false' }, label); b.addEventListener('click', fn); return b; }
+
+  function renderList(items) {
+    const fc = $('fchips'), rows = $('rows'); fc.textContent = ''; rows.textContent = '';
+    if (!state.ready) { for (let i = 0; i < 4; i++) rows.append(h('div', { class: 'skel' })); return; }
+    if (state.filter) fc.append(chip(NAME[state.filter] + '  ×', true, () => { state.filter = null; render(false); }));
+    fc.hidden = !fc.children.length;
+    const shown = items.filter((i) => !state.filter || i.cat === state.filter);
+    if (!shown.length) { rows.append(h('p', { class: 'empty' }, items.length ? 'Nothing in this jar yet.' : 'No expenses this month. Drop one above.')); return; }
+    const todayStr = ymd(today), yest = ymd(yesterday);
+    let last = null;
+    shown.forEach((it) => {
+      if (it.date !== last) {
+        last = it.date;
+        const d = new Date(+it.date.slice(0, 4), +it.date.slice(5, 7) - 1, +it.date.slice(8, 10));
+        const lbl = it.date === todayStr ? 'Today' : it.date === yest ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+        rows.append(h('div', { class: 'day' }, h('span', {}, lbl), h('span', {}, fmt(sum(shown.filter((x) => x.date === it.date))))));
+      }
+      const x = document.createElementNS(SVGNS, 'svg');
+      x.setAttribute('width', '14'); x.setAttribute('height', '14'); x.setAttribute('viewBox', '0 0 14 14'); x.setAttribute('fill', 'none');
+      x.setAttribute('stroke', 'currentColor'); x.setAttribute('stroke-width', '2'); x.setAttribute('stroke-linecap', 'round');
+      const p = document.createElementNS(SVGNS, 'path'); p.setAttribute('d', 'M3 3l8 8M11 3l-8 8'); x.append(p);
+      const row = h('div', { class: 'row' + (it.id === freshId ? ' fresh' : ''), 'data-id': it.id },
+        h('span', { class: 'bdg' }, LET[it.cat] || 'O'),
+        h('div', { class: 't' }, h('span', { class: 'tn' }, it.note || NAME[it.cat] || it.cat), it.note ? h('span', { class: 'tc' }, NAME[it.cat] || it.cat) : null),
+        h('span', { class: 'amt' }, fmt(it.amt)),
+        h('button', { type: 'button', class: 'del', 'aria-label': 'Delete ' + (it.note || NAME[it.cat]) + ', ' + fmt(it.amt) }, x));
+      row.style.setProperty('--cc', 'var(--c-' + it.cat + ')');
+      rows.append(row);
+    });
+    freshId = null;
+  }
+
+  /* ---------- quick-add preview ---------- */
+  function updatePreview() {
+    const el = $('parsed'), raw = $('quick').value.trim();
+    el.textContent = '';
+    if (!raw) { el.append('Type an amount, then what it was for. Words like chai, metro or rent pick the jar, and "yesterday" sets the day.'); return; }
+    const p = parseQuick(raw);
+    if (!(p.amt > 0)) { el.append('Start with an amount, like 120 chai.'); return; }
+    const cat = state.pick || guess(p.note);
+    const date = p.when === 'yesterday' ? ymd(yesterday) : p.when === 'today' ? ymd(today) : $('date').value;
+    const dot = h('i', { class: 'dot' }); dot.style.setProperty('--cc', 'var(--c-' + cat + ')');
+    const dl = date === ymd(today) ? 'Today' : date === ymd(yesterday) ? 'Yesterday' : (/^\d{4}-\d{2}-\d{2}$/.test(date) ? shortDate(date) : 'Pick a date');
+    el.append(h('span', { class: 'tag' }, dot, h('span', { class: 'amtp' }, fmt(p.amt)), '→ ' + NAME[cat]), h('span', {}, '· ' + dl + (p.note ? ' · ' + p.note : '')));
+  }
+  function renderPick() {
+    const el = $('pick'); el.textContent = '';
+    const auto = h('button', { type: 'button', class: 'cc auto', 'aria-pressed': state.pick ? 'false' : 'true' }, 'Auto'); auto.addEventListener('click', () => { state.pick = null; renderPick(); updatePreview(); });
+    el.append(auto);
+    CATS.forEach(([k, n]) => {
+      const b = h('button', { type: 'button', class: 'cc', 'aria-pressed': state.pick === k ? 'true' : 'false' }, h('i', { class: 'dot' }), n);
+      b.style.setProperty('--cc', 'var(--c-' + k + ')'); b.firstChild.style.setProperty('--cc', 'var(--c-' + k + ')');
+      b.addEventListener('click', () => { state.pick = state.pick === k ? null : k; renderPick(); updatePreview(); });
+      el.append(b);
+    });
+  }
+
+  /* ---------- toast ---------- */
+  let toastTimer = null, undoFn = null;
+  function toast(msg, undo) {
+    $('tmsg').textContent = msg; undoFn = undo || null;
+    $('undo').hidden = !undo; $('toast').hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $('toast').hidden = true; undoFn = null; }, undo ? 6000 : 2400);
+  }
+  $('undo').addEventListener('click', () => { if (undoFn) undoFn(); $('toast').hidden = true; undoFn = null; });
+
+  /* ---------- persistence ---------- */
+  let mode = 'pending', ref = null, saving = false, dirty = false, pt = null;
+  const SYNC = {
+    loading: 'Loading your expenses…', account: 'Saved to your account', local: 'Saved on this device', saving: 'Saving…',
+    slow: 'Saved data is slow to respond. Showing examples for now.', error: 'Could not save. Changes stay on this page until it reloads.', memory: 'Not saved. Storage is blocked in this view.'
+  };
+  const setSync = (k) => { $('sync').textContent = SYNC[k] || ''; };
+  const payload = () => ({ v: 1, items: state.examples ? [] : state.items, examples: state.examples, budget: state.budget, currency: state.currency, updatedAt: Date.now() });
+  function persist() { if (!state.ready) return; clearTimeout(pt); pt = setTimeout(flush, 350); }
+  async function flush() {
+    if (mode === 'db' && ref) {
+      if (saving) { dirty = true; return; }
+      saving = true; setSync('saving');
+      try { do { dirty = false; await ref.set(payload()); } while (dirty); setSync('account'); }
+      catch (e) { setSync('error'); }
+      saving = false;
+    } else {
+      try { localStorage.setItem(KEY, JSON.stringify(payload())); setSync('local'); }
+      catch (e) { setSync('memory'); }
+    }
+  }
+  function applyDoc(d) {
+    if (!d || typeof d !== 'object') return startExamples();
+    if (LOC[d.currency]) state.currency = d.currency;
+    state.budget = d.budget > 0 ? Number(d.budget) : DEF_BUDGET[state.currency];
+    state.examples = !!d.examples;
+    if (state.examples) state.items = makeSamples();
+    else state.items = (Array.isArray(d.items) ? d.items : []).filter((i) => i && i.amt > 0 && /^\d{4}-\d{2}-\d{2}$/.test(i.date) && NAME[i.cat]).map((i) => ({ id: String(i.id || uid()), amt: Number(i.amt), cat: i.cat, note: String(i.note || '').slice(0, 80), date: i.date, t: Number(i.t) || 0 }));
+    state.ready = true; render(true); intro();
+  }
+  function startExamples() { state.examples = true; state.items = makeSamples(); state.ready = true; render(true); intro(); }
+  const sig = (o) => { try { return JSON.stringify([o.items, o.budget, o.currency, !!o.examples]); } catch (e) { return ''; } };
+
+  function boot() {
+    render(true);
+    mode = 'local';
+    let d = null; try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+    if (d) applyDoc(d); else startExamples();
+    setSync('local');
+  }
+
+  /* ---------- actions ---------- */
+  function addExpense(e) {
+    e.preventDefault();
+    const p = parseQuick($('quick').value), err = $('err'), q = $('quick');
+    if (!(p.amt > 0) || p.amt >= 1e9) {
+      err.textContent = 'Start with an amount, like "120 chai".'; err.hidden = false;
+      q.classList.remove('shake'); void q.offsetWidth; q.classList.add('shake'); q.focus(); return;
+    }
+    const date = p.when === 'yesterday' ? ymd(yesterday) : p.when === 'today' ? ymd(today) : $('date').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { err.textContent = 'Pick a date for this expense.'; err.hidden = false; $('date').focus(); return; }
+    err.hidden = true;
+    if (state.examples) { state.items = []; state.examples = false; }
+    const cat = state.pick || guess(p.note);
+    const it = { id: uid(), amt: p.amt, cat, note: p.note, date, t: Date.now() };
+    state.items.push(it);
+    state.view = { y: +date.slice(0, 4), m: +date.slice(5, 7) - 1 };
+    state.filter = null; freshId = it.id;
+    q.value = ''; q.focus();
+    spawn(cat, it.amt, date.slice(0, 7), false, 0);
+    render(false); persist();
+    toast('Dropped ' + fmt(it.amt) + ' into ' + NAME[cat]);
+    if (!RM) {
+      const r = cv.getBoundingClientRect(), vh = window.innerHeight || 700;
+      if (r.bottom < 120 || r.top > vh * 0.75) cv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+  function removeItem(id) {
+    const it = state.items.find((i) => i.id === id); if (!it) return;
+    const done = () => {
+      const k = state.items.findIndex((i) => i.id === id); if (k >= 0) state.items.splice(k, 1);
+      render(false); persist();
+      toast('Deleted ' + fmt(it.amt) + ' · ' + NAME[it.cat], () => { state.items.push(it); freshId = it.id; render(false); persist(); });
+    };
+    const row = $('rows').querySelector('[data-id="' + CSS.escape(id) + '"]');
+    if (row && !RM) { row.classList.add('leaving'); setTimeout(done, 200); } else done();
+  }
+  function shiftMonth(n) {
+    const d = new Date(state.view.y, state.view.m + n, 1);
+    state.view = { y: d.getFullYear(), m: d.getMonth() }; state.filter = null; coins = coins.filter((c) => c.ghost); render(true);
+  }
+  function csvText() {
+    const esc = (s) => '"' + String(s).replace(/"/g, '""') + '"';
+    const rows = state.items.slice().sort((a, b) => a.date.localeCompare(b.date) || a.t - b.t);
+    return ['date,category,note,amount,currency'].concat(rows.map((i) => [i.date, NAME[i.cat], esc(i.note), i.amt, state.currency].join(','))).join('\n');
+  }
+
+  /* ---------- wiring ---------- */
+  $('date').value = ymd(today);
+  $('date').max = '2100-12-31';
+  renderPick();
+  $('add').addEventListener('submit', addExpense);
+  $('quick').addEventListener('input', () => { $('err').hidden = true; updatePreview(); });
+  $('date').addEventListener('input', updatePreview);
+  $('prev').addEventListener('click', () => shiftMonth(-1));
+  $('next').addEventListener('click', () => shiftMonth(1));
+  $('today').addEventListener('click', () => { state.view = { y: today.getFullYear(), m: today.getMonth() }; state.filter = null; render(true); });
+  $('cur').addEventListener('change', (e) => {
+    state.currency = e.target.value;
+    if (state.examples) { state.items = makeSamples(); state.budget = DEF_BUDGET[state.currency]; }
+    render(false); persist();
+  });
+  $('clearEx').addEventListener('click', () => { state.examples = false; state.items = []; render(false); persist(); $('quick').focus(); });
+  $('rows').addEventListener('click', (e) => { const b = e.target.closest('.del'); if (b) removeItem(b.closest('.row').getAttribute('data-id')); });
+  $('jars').addEventListener('click', (e) => { const b = e.target.closest('.jar'); if (!b) return; const c = b.getAttribute('data-cat'); state.filter = state.filter === c ? null : c; render(false); });
+  $('mchart').addEventListener('click', (e) => {
+    const b = e.target.closest('.mcol'); if (!b) return;
+    state.view = { y: +b.getAttribute('data-y'), m: +b.getAttribute('data-m') }; state.filter = null; coins = coins.filter((c) => c.ghost); render(false);
+  });
+  $('editBudget').addEventListener('click', () => { $('bform').hidden = false; $('editBudget').hidden = true; $('binput').value = state.budget; $('binput').focus(); $('binput').select(); });
+  $('bform').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = Math.round(parseFloat(String($('binput').value).replace(/[^0-9.]/g, '')));
+    if (v > 0 && v < 1e10) { state.budget = v; persist(); }
+    $('bform').hidden = true; $('editBudget').hidden = false; render(false);
+  });
+  $('binput').addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('bform').hidden = true; $('editBudget').hidden = false; } });
+  $('csv').addEventListener('click', () => {
+    const text = csvText(), box = $('csvbox');
+    const fallback = () => { box.hidden = false; box.value = text; box.focus(); box.select(); toast('Select all and copy the text below'); };
+    try { navigator.clipboard.writeText(text).then(() => { box.hidden = true; toast('CSV copied'); }, fallback); } catch (e) { fallback(); }
+  });
+  let armTimer = null;
+  $('clear').addEventListener('click', () => {
+    const b = $('clear');
+    if (b.dataset.arm) {
+      clearTimeout(armTimer); delete b.dataset.arm; b.textContent = 'Clear all';
+      state.items = []; state.examples = false; state.filter = null; coins = []; render(false); persist(); toast('All expenses cleared');
+    } else {
+      b.dataset.arm = '1'; b.textContent = 'Sure? Clear everything';
+      armTimer = setTimeout(() => { delete b.dataset.arm; b.textContent = 'Clear all'; }, 4000);
+    }
+  });
+
+  layout();
+  boot();
+})();
+</script>
+
+</body>
+</html>
