@@ -4,7 +4,7 @@ An expense tracker where every expense is a coin. Type `120 chai with friends`, 
 
 ![Coin Drop on desktop](docs/screenshot-desktop.png)
 
-**Live demo:** https://YOUR-USERNAME.github.io/coin-drop/
+**Live demo:** https://tambesujal406-design.github.io/coin-drop/
 
 ![Dropping an expense](docs/demo.gif)
 
